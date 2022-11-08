@@ -2,6 +2,9 @@ import csv
 import math
 from openpyxl import Workbook
 from openpyxl.styles import Font, Border, Side
+import numpy as np
+import matplotlib as mpl
+import matplotlib.pyplot as plt
 
 
 class DataSet:
@@ -109,8 +112,9 @@ class Statistics:
         self.get_average_salary(self.prof_salary_by_year, self.prof_count_by_year)
         self.get_average_salary(self.salary_by_city, self.count_by_city)
         self.get_percentage_of_total(self.count_by_city, len(self.vacancies))
-        self.get_cities_with_enough_count()
 
+
+        self.get_cities_with_enough_count()
         self.sort_statistics()
         self.print_stats()
 
@@ -145,6 +149,12 @@ class Statistics:
         self.salary_by_city = dict(sorted(self.salary_by_city.items(), key=lambda x: x[1], reverse=True)[:10])
         self.count_by_city = dict(sorted(self.count_by_city.items(), key=lambda x: x[1], reverse=True)[:10])
 
+    def get_percent_of_other_cities(self) -> None:
+        others_percent = 1
+        for city_percent in self.count_by_city.values():
+            others_percent -= city_percent
+        self.count_by_city['Другие'] = others_percent
+
     def print_stats(self) -> None:
         print('Динамика уровня зарплат по годам:', self.salary_by_year)
         print('Динамика количества вакансий по годам:', self.count_by_year)
@@ -158,61 +168,120 @@ class Report:
     def __init__(self, statistics: Statistics):
         self.statistics = statistics
         self.statistics.get_statistics()
-        self.usedColumns = ['A', 'B', 'C', 'D', 'E']
 
-        self.workbook, self.years_sheet, self.cities_sheet = self.initialize_workbook()
-        self.add_stats_to_excel()
-        self.set_sheets_settings()
+        self.initialize_workbook()
+        self.generate_image()
 
-        self.workbook.save('report.xlsx')
+    def initialize_workbook(self):
+        workbook, years_sheet, cities_sheet = self.create_workbook()
+        self.add_stats_to_excel(years_sheet, cities_sheet)
+        self.set_sheets_settings(years_sheet, cities_sheet)
 
-    def initialize_workbook(self) -> tuple:
+        workbook.save('report.xlsx')
+
+    def generate_image(self):
+        plt.subplots(figsize=(10, 7))
+        plt.grid(True)
+
+        self.create_salary_by_year_plot()
+        self.create_count_by_year_plot()
+        self.create_salary_by_city_plot()
+        self.create_count_by_city_plot()
+
+        plt.subplots_adjust(wspace=0.5, hspace=0.5)
+        plt.savefig('graph.png')
+
+    def create_salary_by_year_plot(self):
+        first = plt.subplot(221)
+        plt.tick_params(axis='x', which='major', labelsize=8, rotation=90)
+        plt.tick_params(axis='y', which='major', labelsize=8)
+        first.bar(list(map(lambda y: y - 0.2, self.statistics.salary_by_year.keys())),
+                  self.statistics.salary_by_year.values(), width=0.4,
+                  label='Средняя з/п')
+        first.bar(list(map(lambda y: y + 0.2, self.statistics.prof_salary_by_year.keys())),
+                  self.statistics.prof_salary_by_year.values(), width=0.4,
+                  label=f'З/п {self.statistics.input_values.vacancy_name}')
+        plt.legend(fontsize=8)
+        plt.title('Уровень зарплат по годам', fontsize=12)
+
+    def create_count_by_year_plot(self):
+        second = plt.subplot(222)
+        plt.tick_params(axis='x', which='major', labelsize=8, rotation=90)
+        plt.tick_params(axis='y', which='major', labelsize=8)
+        second.bar(list(map(lambda y: y - 0.2, self.statistics.count_by_year.keys())),
+                   self.statistics.count_by_year.values(), width=0.4,
+                   label='Количество вакансий')
+        second.bar(list(map(lambda y: y + 0.2, self.statistics.prof_count_by_year.keys())),
+                   self.statistics.prof_count_by_year.values(), width=0.4,
+                   label=f'Количество вакансий {self.statistics.input_values.vacancy_name}')
+        plt.legend(fontsize=8)
+        plt.title('Количество вакансий по годам', fontsize=12)
+
+    def create_salary_by_city_plot(self):
+        third = plt.subplot(223)
+        plt.tick_params(axis='x', which='major', labelsize=8)
+        plt.tick_params(axis='y', which='major', labelsize=6)
+        third.barh(list(reversed(self.statistics.salary_by_city.keys())),
+                   list(reversed(self.statistics.salary_by_city.values())))
+        plt.title('Уровень зарплат по городам', fontsize=12)
+
+    def create_count_by_city_plot(self):
+        self.statistics.get_percent_of_other_cities()
+        fourth = plt.subplot(224)
+        plt.rc('xtick', labelsize=6)
+        fourth.pie(list(map(lambda c: round(c * 100, 2), self.statistics.count_by_city.values())),
+                   labels=self.statistics.count_by_city.keys(),
+                   colors=['r', 'g', 'b', 'm', 'y', 'c', 'orange', 'darkblue', 'pink', 'sienna', 'grey'])
+        plt.title('Доля вакансий по городам', fontsize=12)
+
+    def create_workbook(self) -> tuple:
         workbook = Workbook()
 
         years_sheet = workbook.active
         years_sheet.title = 'Статистика по годам'
         cities_sheet = workbook.create_sheet('Статистика по городам')
 
-        years_sheet.append(['Год', 'Средняя зарплата', f'Средняя зарплата - {self.statistics.input_values.vacancy_name}',
-                            'Количество вакансий', f'Количество вакансий - {self.statistics.input_values.vacancy_name}'])
+        years_sheet.append(
+            ['Год', 'Средняя зарплата', f'Средняя зарплата - {self.statistics.input_values.vacancy_name}',
+             'Количество вакансий', f'Количество вакансий - {self.statistics.input_values.vacancy_name}'])
         cities_sheet.append(['Город', 'Уровень зарплат', '', 'Город', 'Доля Вакансий'])
 
         return workbook, years_sheet, cities_sheet
 
-    def add_stats_to_excel(self):
+    def add_stats_to_excel(self, years_sheet, cities_sheet):
         for year in self.statistics.salary_by_year.keys():
-            self.years_sheet.append([year,
+            years_sheet.append([year,
                                      self.statistics.salary_by_year[year],
                                      self.statistics.prof_salary_by_year[year],
                                      self.statistics.count_by_year[year],
                                      self.statistics.prof_salary_by_year[year]])
 
         for city in self.statistics.salary_by_city.keys():
-            self.cities_sheet.append([city, self.statistics.salary_by_city[city]])
+            cities_sheet.append([city, self.statistics.salary_by_city[city]])
 
         for i, city in enumerate(self.statistics.count_by_city.keys(), 2):
-            self.cities_sheet[f'D{i}'].value = city
-            self.cities_sheet[f'E{i}'].value = f'{round(self.statistics.count_by_city[city] * 100, 2)}%'
+            cities_sheet[f'D{i}'].value = city
+            cities_sheet[f'E{i}'].value = f'{round(self.statistics.count_by_city[city] * 100, 2)}%'
 
-    def set_sheets_settings(self) -> None:
-        for i in self.usedColumns:
-            self.years_sheet[f'{i}1'].font = Font(bold=True)
-            self.cities_sheet[f'{i}1'].font = Font(bold=True)
-            self.years_sheet.column_dimensions[i].width = max(map(lambda x: len(str(x.value)), self.years_sheet[i])) + 1
-            self.cities_sheet.column_dimensions[i].width = max(map(lambda x: len(str(x.value)), self.cities_sheet[i])) + 1
+    def set_sheets_settings(self, years_sheet, cities_sheet) -> None:
+        used_columns = ['A', 'B', 'C', 'D', 'E']
+        for i in used_columns:
+            years_sheet[f'{i}1'].font = Font(bold=True)
+            cities_sheet[f'{i}1'].font = Font(bold=True)
+            years_sheet.column_dimensions[i].width = max(map(lambda x: len(str(x.value)), years_sheet[i])) + 1
+            cities_sheet.column_dimensions[i].width = max(
+                map(lambda x: len(str(x.value)), cities_sheet[i])) + 1
 
         thins = Side(border_style="thin")
-        for column in self.usedColumns:
+        for column in used_columns:
             for row in range(1, len(self.statistics.salary_by_year.keys()) + 2):
-                self.years_sheet[f'{column}{row}'].border = Border(top=thins, bottom=thins, left=thins, right=thins)
+                years_sheet[f'{column}{row}'].border = Border(top=thins, bottom=thins, left=thins, right=thins)
 
-        for column in self.usedColumns:
+        for column in used_columns:
             for row in range(1, len(self.statistics.salary_by_city.keys()) + 2):
                 if column == 'C':
                     break
-                self.cities_sheet[f'{column}{row}'].border = Border(top=thins, bottom=thins, left=thins, right=thins)
-
+                cities_sheet[f'{column}{row}'].border = Border(top=thins, bottom=thins, left=thins, right=thins)
 
 statistics = Statistics()
 report = Report(statistics)
-
