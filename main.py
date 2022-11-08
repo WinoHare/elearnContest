@@ -155,8 +155,8 @@ class Statistics:
 
 
 class Report:
-    def __init__(self):
-        self.statistics = Statistics()
+    def __init__(self, statistics: Statistics):
+        self.statistics = statistics
         self.statistics.get_statistics()
         self.usedColumns = ['A', 'B', 'C', 'D', 'E']
 
@@ -173,8 +173,8 @@ class Report:
         years_sheet.title = 'Статистика по годам'
         cities_sheet = workbook.create_sheet('Статистика по городам')
 
-        years_sheet.append(['Год', 'Средняя зарплата', 'Средняя зарплата - Программист',
-                            'Количество вакансий', 'Количество вакансий - Программист'])
+        years_sheet.append(['Год', 'Средняя зарплата', f'Средняя зарплата - {self.statistics.input_values.vacancy_name}',
+                            'Количество вакансий', f'Количество вакансий - {self.statistics.input_values.vacancy_name}'])
         cities_sheet.append(['Город', 'Уровень зарплат', '', 'Город', 'Доля Вакансий'])
 
         return workbook, years_sheet, cities_sheet
@@ -213,4 +213,6 @@ class Report:
                 self.cities_sheet[f'{column}{row}'].border = Border(top=thins, bottom=thins, left=thins, right=thins)
 
 
-report = Report()
+statistics = Statistics()
+report = Report(statistics)
+
